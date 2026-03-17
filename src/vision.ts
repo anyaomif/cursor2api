@@ -59,12 +59,13 @@ async function processWithLocalOCR(imageBlocks: AnthropicContentBlock[]): Promis
         const img = imageBlocks[i];
         let imageSource: string | Buffer = '';
 
-        if (img.type === 'image' && img.source?.data) {
-            if (img.source.type === 'base64') {
+        if (img.type === 'image' && img.source) {
+            const sourceData = img.source.data || img.source.url;
+            if (img.source.type === 'base64' && sourceData) {
                 const mime = img.source.media_type || 'image/jpeg';
-                imageSource = `data:${mime};base64,${img.source.data}`;
-            } else if (img.source.type === 'url') {
-                imageSource = img.source.data;
+                imageSource = `data:${mime};base64,${sourceData}`;
+            } else if (img.source.type === 'url' && sourceData) {
+                imageSource = sourceData;
             }
         }
 
@@ -92,15 +93,16 @@ async function callVisionAPI(imageBlocks: AnthropicContentBlock[]): Promise<stri
     ];
 
     for (const img of imageBlocks) {
-        if (img.type === 'image' && img.source?.data) {
+        if (img.type === 'image' && img.source) {
+            const sourceData = img.source.data || img.source.url;
             let url = '';
             // If it's a raw base64 string
-            if (img.source.type === 'base64') {
+            if (img.source.type === 'base64' && sourceData) {
                 const mime = img.source.media_type || 'image/jpeg';
-                url = `data:${mime};base64,${img.source.data}`;
-            } else if (img.source.type === 'url') {
-                // Handle remote URLs natively mapped from OpenAI payloads
-                url = img.source.data;
+                url = `data:${mime};base64,${sourceData}`;
+            } else if (img.source.type === 'url' && sourceData) {
+                // Handle remote URLs natively mapped from OpenAI/Anthropic payloads
+                url = sourceData;
             }
             if (url) {
                 parts.push({ type: 'image_url', image_url: { url } });

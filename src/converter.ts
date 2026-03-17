@@ -63,8 +63,24 @@ function compactSchema(schema: Record<string, unknown>): string {
 }
 
 /**
+ * 将 JSON Schema 格式化为完整输出（不压缩，保留所有 description）
+ */
+function fullSchema(schema: Record<string, unknown>): string {
+    if (!schema) return '{}';
+    // 移除顶层 description（工具描述已在上面输出）
+    const cleaned = { ...schema };
+    return JSON.stringify(cleaned);
+}
+
+/**
  * 将工具定义构建为格式指令
  * 使用 Cursor IDE 原生场景融合：不覆盖模型身份，而是顺应它在 IDE 内的角色
+ * 
+ * 配置项（config.yaml → tools 节）：
+ *   schema_mode: 'compact' | 'full' | 'names_only'
+ *   description_max_length: number (0=不截断)
+ *   include_only: string[] (白名单)
+ *   exclude: string[] (黑名单)
  */
 function buildToolInstructions(
     tools: AnthropicTool[],
@@ -73,12 +89,53 @@ function buildToolInstructions(
 ): string {
     if (!tools || tools.length === 0) return '';
 
-    const toolList = tools.map((tool) => {
-        // ★ 使用紧凑 Schema 替代完整 JSON Schema 以大幅减小输入体积
-        const schema = tool.input_schema ? compactSchema(tool.input_schema) : '{}';
-        const desc = (tool.description || '').substring(0, 50);
-        // Markdown 文档格式：更自然，不像 API spec
-        const paramStr = schema ? `\n  Params: {${schema}}` : '';
+    const config = getConfig();
+    const toolsCfg = config.tools || { schemaMode: 'compact', descriptionMaxLength: 50 };
+    const schemaMode = toolsCfg.schemaMode || 'compact';
+    const descMaxLen = toolsCfg.descriptionMaxLength ?? 50;
+
+    // ★ Phase 1: 工具过滤（白名单 + 黑名单）
+    let filteredTools = tools;
+
+    if (toolsCfg.includeOnly && toolsCfg.includeOnly.length > 0) {
+        const whiteSet = new Set(toolsCfg.includeOnly);
+        filteredTools = filteredTools.filter(t => whiteSet.has(t.name));
+    }
+
+    if (toolsCfg.exclude && toolsCfg.exclude.length > 0) {
+        const blackSet = new Set(toolsCfg.exclude);
+        filteredTools = filteredTools.filter(t => !blackSet.has(t.name));
+    }
+
+    if (filteredTools.length === 0) return '';
+
+    const filterInfo = filteredTools.length !== tools.length
+        ? ` (filtered: ${filteredTools.length}/${tools.length})`
+        : '';
+    if (filterInfo) {
+        console.log(`[Converter] 工具过滤${filterInfo}`);
+    }
+
+    // ★ Phase 2: 构建工具列表
+    const toolList = filteredTools.map((tool) => {
+        // 描述处理
+        let desc = tool.description || '';
+        if (descMaxLen > 0 && desc.length > descMaxLen) {
+            desc = desc.substring(0, descMaxLen) + '…';
+        }
+        // descMaxLen === 0 → 不截断，保留完整描述
+
+        // Schema 处理
+        let paramStr = '';
+        if (schemaMode === 'compact' && tool.input_schema) {
+            const schema = compactSchema(tool.input_schema);
+            paramStr = schema && schema !== '{}' ? `\n  Params: ${schema}` : '';
+        } else if (schemaMode === 'full' && tool.input_schema) {
+            const schema = fullSchema(tool.input_schema);
+            paramStr = `\n  Schema: ${schema}`;
+        }
+        // schemaMode === 'names_only' → 不输出参数，最小体积
+
         return desc ? `- **${tool.name}**: ${desc}${paramStr}` : `- **${tool.name}**${paramStr}`;
     }).join('\n');
 
@@ -516,8 +573,9 @@ function extractMessageText(msg: AnthropicMessage): string {
                 break;
 
             case 'image':
-                if (block.source?.data) {
-                    const sizeKB = Math.round(block.source.data.length * 0.75 / 1024);
+                if (block.source?.data || block.source?.url) {
+                    const sourceData = block.source.data || block.source.url!;
+                    const sizeKB = Math.round(sourceData.length * 0.75 / 1024);
                     const mediaType = block.source.media_type || 'unknown';
                     parts.push(`[Image attached: ${mediaType}, ~${sizeKB}KB. Note: Image was not processed by vision system. The content cannot be viewed directly.]`);
                 } else {
@@ -900,9 +958,45 @@ function shortId(): string {
 async function preprocessImages(messages: AnthropicMessage[]): Promise<void> {
     if (!messages || messages.length === 0) return;
 
-    // 统计图片数量 + URL 图片下载转 base64
+    // ★ Phase 1: 格式归一化 — 将各种客户端格式统一为 { type: 'image', source: { type: 'base64'|'url', data: '...' } }
+    // 不同客户端发送图片的格式差异巨大：
+    //   - Anthropic API: { type: 'image', source: { type: 'url', url: 'https://...' } } (url 字段，非 data)
+    //   - OpenAI API 转换后: { type: 'image', source: { type: 'url', data: 'https://...' } }
+    //   - 部分客户端: { type: 'image', source: { type: 'base64', data: '...' } }
+    for (const msg of messages) {
+        if (!Array.isArray(msg.content)) continue;
+        for (let i = 0; i < msg.content.length; i++) {
+            const block = msg.content[i] as any;
+            if (block.type !== 'image') continue;
+
+            // ★ 归一化 Anthropic 原生 URL 格式: source.url → source.data
+            // Anthropic API 文档规定 URL 图片使用 { type: 'url', url: '...' }
+            // 但我们内部统一使用 source.data 字段
+            if (block.source?.type === 'url' && block.source.url && !block.source.data) {
+                block.source.data = block.source.url;
+                if (!block.source.media_type) {
+                    block.source.media_type = guessMediaType(block.source.data);
+                }
+                console.log(`[Converter] 🔄 归一化 Anthropic URL 图片: source.url → source.data`);
+            }
+
+            // ★ 兜底：source.data 是完整 data: URI 但 type 仍标为 'url'
+            if (block.source?.type === 'url' && block.source.data?.startsWith('data:')) {
+                const match = block.source.data.match(/^data:([^;]+);base64,(.+)$/);
+                if (match) {
+                    block.source.type = 'base64';
+                    block.source.media_type = match[1];
+                    block.source.data = match[2];
+                    console.log(`[Converter] 🔄 修正 data: URI → base64 格式`);
+                }
+            }
+        }
+    }
+
+    // ★ Phase 2: 统计图片数量 + URL 图片下载转 base64
     let totalImages = 0;
     let urlImages = 0;
+    let base64Images = 0;
     for (const msg of messages) {
         if (!Array.isArray(msg.content)) continue;
         for (let i = 0; i < msg.content.length; i++) {
@@ -912,9 +1006,15 @@ async function preprocessImages(messages: AnthropicMessage[]): Promise<void> {
                 // ★ URL 图片处理：远程 URL 需要下载转为 base64（OCR 和 Vision API 均需要）
                 if (block.source?.type === 'url' && block.source.data && !block.source.data.startsWith('data:')) {
                     urlImages++;
+                    const imageUrl = block.source.data;
+                    console.log(`[Converter] 📥 下载远程图片 (${urlImages}): ${imageUrl.substring(0, 100)}...`);
                     try {
-                        const response = await fetch(block.source.data, {
+                        const response = await fetch(imageUrl, {
                             ...getVisionProxyFetchOptions(),
+                            headers: {
+                                // 部分图片服务（如 Telegram）需要 User-Agent
+                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                            },
                         } as any);
                         if (!response.ok) throw new Error(`HTTP ${response.status}`);
                         const buffer = Buffer.from(await response.arrayBuffer());
@@ -926,27 +1026,26 @@ async function preprocessImages(messages: AnthropicMessage[]): Promise<void> {
                             ...block,
                             source: { type: 'base64', media_type: mediaType, data: base64Data },
                         };
+                        console.log(`[Converter] ✅ 图片下载成功: ${mediaType}, ${Math.round(base64Data.length * 0.75 / 1024)}KB`);
                     } catch (err) {
-                        console.error(`[Converter] ❌ 远程图片下载失败:`, err);
+                        console.error(`[Converter] ❌ 远程图片下载失败 (${imageUrl.substring(0, 80)}):`, err);
                         // 下载失败时替换为错误提示文本
                         msg.content[i] = {
                             type: 'text',
-                            text: `[Image from URL could not be downloaded: ${(err as Error).message}]`,
+                            text: `[Image from URL could not be downloaded: ${(err as Error).message}. URL: ${imageUrl.substring(0, 100)}]`,
                         } as any;
                     }
+                } else if (block.source?.type === 'base64' && block.source.data) {
+                    base64Images++;
                 }
             }
         }
     }
 
     if (totalImages === 0) return;
-    if (urlImages > 0) {
-        // image stats now in web UI
-    }
+    console.log(`[Converter] 📊 图片统计: 总计 ${totalImages} 张 (base64: ${base64Images}, URL下载: ${urlImages})`);
 
-    // vision processing logged in web UI
-
-    // 调用 vision 拦截器处理（OCR / 外部 API）
+    // ★ Phase 3: 调用 vision 拦截器处理（OCR / 外部 API）
     try {
         await applyVisionInterceptor(messages);
 
@@ -960,12 +1059,26 @@ async function preprocessImages(messages: AnthropicMessage[]): Promise<void> {
         }
 
         if (remainingImages > 0) {
-            // vision incomplete logged in web UI
+            console.warn(`[Converter] ⚠️ Vision 处理后仍有 ${remainingImages} 张图片未转换为文本`);
         } else {
-            // vision complete logged in web UI
+            console.log(`[Converter] ✅ 所有图片已成功处理 (vision ${getConfig().vision?.mode || 'disabled'})`);
         }
     } catch (err) {
         console.error(`[Converter] ❌ vision 预处理失败:`, err);
         // 失败时不阻塞请求，image block 会被 extractMessageText 的 case 'image' 兜底处理
     }
 }
+
+/**
+ * 根据 URL 猜测 MIME 类型
+ */
+function guessMediaType(url: string): string {
+    const lower = url.toLowerCase();
+    if (lower.includes('.png')) return 'image/png';
+    if (lower.includes('.gif')) return 'image/gif';
+    if (lower.includes('.webp')) return 'image/webp';
+    if (lower.includes('.svg')) return 'image/svg+xml';
+    if (lower.includes('.bmp')) return 'image/bmp';
+    return 'image/jpeg'; // 默认 JPEG
+}
+

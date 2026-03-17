@@ -69,6 +69,17 @@ export function getConfig(): AppConfig {
                     max_days: typeof yaml.logging.max_days === 'number' ? yaml.logging.max_days : 7,
                 };
             }
+            // ★ 工具处理配置
+            if (yaml.tools !== undefined) {
+                const t = yaml.tools;
+                const validModes = ['compact', 'full', 'names_only'];
+                config.tools = {
+                    schemaMode: validModes.includes(t.schema_mode) ? t.schema_mode : 'compact',
+                    descriptionMaxLength: typeof t.description_max_length === 'number' ? t.description_max_length : 50,
+                    includeOnly: Array.isArray(t.include_only) ? t.include_only.map(String) : undefined,
+                    exclude: Array.isArray(t.exclude) ? t.exclude.map(String) : undefined,
+                };
+            }
         } catch (e) {
             console.warn('[Config] 读取 config.yaml 失败:', e);
         }

@@ -151,11 +151,25 @@ loadLogsFromFiles();
 app.listen(config.port, () => {
     const auth = config.authTokens?.length ? `${config.authTokens.length} token(s)` : 'open';
     const logPersist = config.logging?.file_enabled ? `file → ${config.logging.dir}` : 'memory only';
+    
+    // Tools 配置摘要
+    const toolsCfg = config.tools;
+    let toolsInfo = 'default (compact, desc≤50)';
+    if (toolsCfg) {
+        const parts: string[] = [];
+        parts.push(`schema=${toolsCfg.schemaMode}`);
+        parts.push(toolsCfg.descriptionMaxLength === 0 ? 'desc=full' : `desc≤${toolsCfg.descriptionMaxLength}`);
+        if (toolsCfg.includeOnly?.length) parts.push(`whitelist=${toolsCfg.includeOnly.length}`);
+        if (toolsCfg.exclude?.length) parts.push(`blacklist=${toolsCfg.exclude.length}`);
+        toolsInfo = parts.join(', ');
+    }
+    
     console.log('');
     console.log(`  \x1b[36m⚡ Cursor2API v${VERSION}\x1b[0m`);
     console.log(`  ├─ Server:  \x1b[32mhttp://localhost:${config.port}\x1b[0m`);
     console.log(`  ├─ Model:   ${config.cursorModel}`);
     console.log(`  ├─ Auth:    ${auth}`);
+    console.log(`  ├─ Tools:   ${toolsInfo}`);
     console.log(`  ├─ Logging: ${logPersist}`);
     console.log(`  └─ Logs:    \x1b[35mhttp://localhost:${config.port}/logs\x1b[0m`);
     console.log('');

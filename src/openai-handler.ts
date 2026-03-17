@@ -227,6 +227,10 @@ function toBlocks(content: string | AnthropicContentBlock[]): AnthropicContentBl
 
 /**
  * 从 OpenAI 消息中提取文本或多模态内容块
+ * 处理多种客户端格式：
+ *   - OpenAI 标准: { type: 'image_url', image_url: { url: '...' } }
+ *   - Anthropic 透传: { type: 'image', source: { type: 'url', url: '...' } }
+ *   - 部分客户端: { type: 'input_image', image_url: { url: '...' } }
  */
 function extractOpenAIContentBlocks(msg: OpenAIMessage): string | AnthropicContentBlock[] {
     if (msg.content === null || msg.content === undefined) return '';
@@ -238,6 +242,49 @@ function extractOpenAIContentBlocks(msg: OpenAIMessage): string | AnthropicConte
                 blocks.push({ type: 'text', text: (p as OpenAIContentPart).text! });
             } else if (p.type === 'image_url' && (p as OpenAIContentPart).image_url?.url) {
                 const url = (p as OpenAIContentPart).image_url!.url;
+                if (url.startsWith('data:')) {
+                    const match = url.match(/^data:([^;]+);base64,(.+)$/);
+                    if (match) {
+                        blocks.push({
+                            type: 'image',
+                            source: { type: 'base64', media_type: match[1], data: match[2] }
+                        });
+                    }
+                } else {
+                    // HTTP(S) URL — 统一存储到 source.data，由 preprocessImages() 下载
+                    blocks.push({
+                        type: 'image',
+                        source: { type: 'url', media_type: 'image/jpeg', data: url }
+                    });
+                }
+            } else if (p.type === 'image' && (p as any).source) {
+                // ★ Anthropic 格式透传：某些客户端混合发送 OpenAI 和 Anthropic 格式
+                const source = (p as any).source;
+                const imageUrl = source.url || source.data;
+                if (source.type === 'base64' && source.data) {
+                    blocks.push({
+                        type: 'image',
+                        source: { type: 'base64', media_type: source.media_type || 'image/jpeg', data: source.data }
+                    });
+                } else if (imageUrl) {
+                    if (imageUrl.startsWith('data:')) {
+                        const match = imageUrl.match(/^data:([^;]+);base64,(.+)$/);
+                        if (match) {
+                            blocks.push({
+                                type: 'image',
+                                source: { type: 'base64', media_type: match[1], data: match[2] }
+                            });
+                        }
+                    } else {
+                        blocks.push({
+                            type: 'image',
+                            source: { type: 'url', media_type: source.media_type || 'image/jpeg', data: imageUrl }
+                        });
+                    }
+                }
+            } else if (p.type === 'input_image' && (p as any).image_url?.url) {
+                // ★ input_image 类型：部分新版 API 客户端使用
+                const url = (p as any).image_url.url;
                 if (url.startsWith('data:')) {
                     const match = url.match(/^data:([^;]+);base64,(.+)$/);
                     if (match) {

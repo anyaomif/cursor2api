@@ -443,7 +443,7 @@ export class RequestLogger {
                     contentLength = m.content.length;
                 } else if (Array.isArray(m.content)) {
                     const textParts = m.content.filter((c: any) => c.type === 'text');
-                    const imageParts = m.content.filter((c: any) => c.type === 'image' || c.type === 'image_url');
+                    const imageParts = m.content.filter((c: any) => c.type === 'image' || c.type === 'image_url' || c.type === 'input_image');
                     hasImages = imageParts.length > 0;
                     const text = textParts.map((c: any) => c.text || '').join('\n');
                     fullContent = text.length > MAX_MSG ? text.substring(0, MAX_MSG) + '\n... [截断]' : text;
@@ -476,11 +476,11 @@ export class RequestLogger {
             }
         }
         
-        // tools
+        // tools — 完整记录，不截断描述（截断由 tools 配置控制，日志应保留原始信息）
         if (Array.isArray(body.tools)) {
             this.payload.tools = body.tools.map((t: any) => ({
                 name: t.name || t.function?.name || 'unknown',
-                description: (t.description || t.function?.description || '').substring(0, 200),
+                description: t.description || t.function?.description || '',
             }));
         }
         

@@ -59,6 +59,39 @@ compression:
   # 早期消息最大字符数（超过此长度的消息会被智能压缩）
   # early_msg_max_chars: 2000
 
+# ==================== 工具处理配置 ====================
+# 控制工具定义如何传递给模型，影响上下文体积和工具调用准确性
+tools:
+  # Schema 呈现模式
+  #   'compact': [默认推荐] TypeScript 风格的紧凑签名，体积最小（~15K chars/90工具）
+  #              示例: {file_path!: string, encoding?: utf-8|base64}
+  #   'full':    完整 JSON Schema，体积最大（~135K chars/90工具），工具调用最精确
+  #              适合工具少（<20个）或参数复杂的场景
+  #   'names_only': 只输出工具名和描述，不输出参数Schema
+  #              极致省 token，适合模型已经"学过"这些工具的场景（如 Claude Code 内置工具）
+  schema_mode: 'compact'
+
+  # 工具描述截断长度
+  #   50: [默认推荐] 截断到 50 个字符，节省上下文
+  #   0:  不截断，保留完整描述（适合工具少的场景）
+  #   200: 中等截断，保留大部分有用信息
+  description_max_length: 50
+
+  # 工具白名单 — 只保留指定名称的工具（不配则保留所有工具）
+  # 💡 适合只用核心工具、排除大量不需要的 MCP 工具等场景
+  # include_only:
+  #   - "Read"
+  #   - "Write"
+  #   - "Bash"
+  #   - "Glob"
+  #   - "Grep"
+  #   - "Edit"
+
+  # 工具黑名单 — 排除指定名称的工具
+  # 💡 比白名单更灵活，可以只去掉几个不常用的工具
+  # exclude:
+  #   - "some_mcp_tool"
+
 # 浏览器指纹配置
 fingerprint:
   user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
