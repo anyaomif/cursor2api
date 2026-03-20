@@ -28,9 +28,17 @@ export function serveAdmin(_req: Request, res: Response): void {
 
 // ==================== API 路由 ====================
 
-/** GET /api/config - 返回当前完整配置 */
+/** GET /api/config - 返回当前完整配置（authTokens 脱敏处理） */
 export function apiGetConfig(_req: Request, res: Response): void {
-    res.json(getConfig());
+    const cfg = getConfig();
+    // authTokens 脱敏：只返回数量 + 掩码，避免前端存储/传输明文 token
+    const sanitized = {
+        ...cfg,
+        authTokens: cfg.authTokens?.map(t =>
+            t.length <= 8 ? '***' : t.substring(0, 4) + '****' + t.substring(t.length - 4)
+        ),
+    };
+    res.json(sanitized);
 }
 
 /**

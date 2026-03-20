@@ -92,6 +92,8 @@ function populateForm(cfg){
   setVal('f-toolsDescLen', tools.descriptionMaxLength??0);
   setVal('f-toolsInclude', (tools.includeOnly||[]).join('\n'));
   setVal('f-toolsExclude', (tools.exclude||[]).join('\n'));
+  setChk('f-toolsPassthrough', tools.passthrough===true);
+  setChk('f-toolsDisabled', tools.disabled===true);
 
   // Vision
   const vis=cfg.vision||{};
@@ -111,6 +113,10 @@ function populateForm(cfg){
 
   // Fingerprint
   setVal('f-userAgent', cfg.fingerprint?.userAgent||'');
+
+  // Sanitize
+  setChk('f-sanitizeEnabled', cfg.sanitizeEnabled===true);
+  setVal('f-refusalPatterns', (cfg.refusalPatterns||[]).join('\n'));
 }
 
 function setVal(id,val){
@@ -169,6 +175,8 @@ function buildConfig(){
     descriptionMaxLength:getNum('f-toolsDescLen',0),
     includeOnly:incl.length?incl:undefined,
     exclude:excl.length?excl:undefined,
+    passthrough:getChk('f-toolsPassthrough')||undefined,
+    disabled:getChk('f-toolsDisabled')||undefined,
   };
 
   // Vision
@@ -192,6 +200,11 @@ function buildConfig(){
   cfg.fingerprint={
     userAgent:getVal('f-userAgent')||'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
   };
+
+  // Sanitize
+  cfg.sanitizeEnabled=getChk('f-sanitizeEnabled');
+  const refusalLines=getLines('f-refusalPatterns');
+  cfg.refusalPatterns=refusalLines.length?refusalLines:null;
 
   return cfg;
 }

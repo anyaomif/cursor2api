@@ -45,6 +45,8 @@ function loadConfigFromSources(): AppConfig {
                     proxy: yaml.vision.proxy || undefined,
                 };
             }
+            if (typeof yaml.sanitize_enabled === 'boolean') c.sanitizeEnabled = yaml.sanitize_enabled;
+            if (Array.isArray(yaml.refusal_patterns)) c.refusalPatterns = yaml.refusal_patterns.map(String);
             // ★ API 鉴权 token
             if (yaml.auth_tokens) {
                 c.authTokens = Array.isArray(yaml.auth_tokens)
@@ -204,6 +206,8 @@ export function saveConfig(): void {
         };
         if (c.tools.includeOnly?.length) t.include_only = c.tools.includeOnly;
         if (c.tools.exclude?.length) t.exclude = c.tools.exclude;
+        if (c.tools.passthrough) t.passthrough = c.tools.passthrough;
+        if (c.tools.disabled) t.disabled = c.tools.disabled;
         yamlObj.tools = t;
     }
     if (c.vision !== undefined) {
@@ -224,6 +228,8 @@ export function saveConfig(): void {
             max_days: c.logging.max_days,
         };
     }
+    if (c.sanitizeEnabled) yamlObj.sanitize_enabled = c.sanitizeEnabled;
+    if (c.refusalPatterns?.length) yamlObj.refusal_patterns = c.refusalPatterns;
     writeFileSync('config.yaml', stringifyYaml(yamlObj), 'utf-8');
     console.log('[Config] 配置已保存到 config.yaml');
 }

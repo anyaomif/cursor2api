@@ -39,6 +39,7 @@
     <button class="sb-item" onclick="navTo('s-vision',this)"><span class="sb-icon">&#x1f441;</span>视觉处理</button>
     <button class="sb-item" onclick="navTo('s-logging',this)"><span class="sb-icon">&#x1f4c4;</span>日志持久化</button>
     <button class="sb-item" onclick="navTo('s-fp',this)"><span class="sb-icon">&#x1f310;</span>浏览器指纹</button>
+    <button class="sb-item" onclick="navTo('s-sanitize',this)"><span class="sb-icon">&#x1f9f9;</span>响应清洗</button>
   </nav>
 
   <!-- Main Content -->
@@ -252,6 +253,22 @@
             <div class="field-hint">排除指定工具名，比白名单更灵活</div>
           </div>
         </div>
+        <div class="field-row">
+          <div class="toggle-row" style="flex:1">
+            <input type="checkbox" id="f-toolsPassthrough" class="toggle-chk">
+            <div class="toggle-info">
+              <div class="toggle-lbl">透传模式 passthrough</div>
+              <div class="toggle-desc">跳过 few-shot 注入，将原始工具 JSON 直接嵌入 system prompt</div>
+            </div>
+          </div>
+          <div class="toggle-row" style="flex:1">
+            <input type="checkbox" id="f-toolsDisabled" class="toggle-chk">
+            <div class="toggle-info">
+              <div class="toggle-lbl">禁用模式 disabled</div>
+              <div class="toggle-desc">完全不注入工具定义，最大化节省上下文（工具调用将不可用）</div>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -328,6 +345,24 @@
           <label class="lbl">User-Agent</label>
           <textarea id="f-userAgent" rows="2"></textarea>
           <div class="field-hint">模拟 Cursor 客户端的浏览器 UA，一般无需修改</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="s-sanitize">
+      <div class="sec-hdr"><span class="sec-icon">&#x1f9f9;</span><span class="sec-title">响应清洗</span><span class="sec-desc">过滤 Cursor 身份暴露 / 自定义拒绝规则</span></div>
+      <div class="sec-body">
+        <div class="toggle-row">
+          <input type="checkbox" id="f-sanitizeEnabled" class="toggle-chk">
+          <div class="toggle-info">
+            <div class="toggle-lbl">启用响应清洗</div>
+            <div class="toggle-desc">自动将 Cursor 身份引用替换为 Claude，防止模型身份泄露</div>
+          </div>
+        </div>
+        <div class="field" style="margin-top:12px">
+          <label class="lbl">自定义拒绝规则 <span class="lbl-hint">每行一个正则</span></label>
+          <textarea id="f-refusalPatterns" placeholder="留空则只使用内置规则" rows="4" class="mono"></textarea>
+          <div class="field-hint">追加到内置拒绝检测列表之后，命中则重试请求</div>
         </div>
       </div>
     </section>
