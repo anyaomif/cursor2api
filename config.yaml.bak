@@ -1,0 +1,31 @@
+port: 9000
+timeout: 120
+cursor_model: anthropic/claude-sonnet-4.6
+max_auto_continue: 0
+max_history_messages: -1
+auth_tokens:
+  - sk-123456
+  - sk-ayao
+fingerprint:
+  user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
+    like Gecko) Chrome/140.0.0.0 Safari/537.36
+thinking:
+  enabled: false
+compression:
+  enabled: false
+  level: 1
+  keep_recent: 10
+  early_msg_max_chars: 4000
+tools:
+  schema_mode: full
+  description_max_length: 0
+vision:
+  enabled: true
+  mode: ocr
+  base_url: https://api.openai.com/v1/chat/completions
+  api_key: ""
+  model: gpt-4o-mini
+logging:
+  file_enabled: false
+  dir: ./logs
+  max_days: 7

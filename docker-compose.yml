@@ -7,7 +7,7 @@ services:
     container_name: cursor2api
     restart: unless-stopped
     ports:
-      - "3010:3010"
+      - "9000:9000"
     volumes:
       # 挂载配置文件（可选）——先从 config.yaml.example 复制一份: cp config.yaml.example config.yaml
       # 修改后只需 docker compose restart 即可生效；不挂载则使用内置默认值 + 环境变量

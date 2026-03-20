@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<script>!function(){var t=localStorage.getItem('cursor2api_theme');if(!t){t=window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'}document.documentElement.setAttribute('data-theme',t)}()</script>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cursor2API - 管理面板</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/public/admin.css">
+</head>
+<body>
+
+<!-- Fixed Header -->
+<div class="hdr">
+  <h1><span class="ic">&#x26a1;</span>Cursor2API</h1>
+  <div class="hdr-nav">
+    <a class="nav-btn" href="/logs" id="navLogs">&#x1f4cb; 日志</a>
+    <a class="nav-btn active" href="/admin">&#x2699;&#xfe0f; 管理</a>
+  </div>
+  <div class="hdr-r">
+    <button class="hdr-btn" id="logoutBtn" style="display:none" onclick="logout()">退出</button>
+    <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="切换主题"></button>
+  </div>
+</div>
+
+<!-- Middle App Area (between header and action bar) -->
+<div class="app">
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="sb-label">概览</div>
+    <button class="sb-item active" onclick="navTo('s-stats',this)"><span class="sb-icon">&#x1f4ca;</span>数据统计</button>
+    <div class="sb-label">配置分区</div>
+    <button class="sb-item" onclick="navTo('s-basic',this)"><span class="sb-icon">&#x1f527;</span>基础设置</button>
+    <button class="sb-item" onclick="navTo('s-auth',this)"><span class="sb-icon">&#x1f511;</span>鉴权配置</button>
+    <button class="sb-item" onclick="navTo('s-model',this)"><span class="sb-icon">&#x1f916;</span>模型与请求</button>
+    <button class="sb-item" onclick="navTo('s-thinking',this)"><span class="sb-icon">&#x1f9e0;</span>Thinking</button>
+    <button class="sb-item" onclick="navTo('s-compression',this)"><span class="sb-icon">&#x1f4e6;</span>消息压缩</button>
+    <button class="sb-item" onclick="navTo('s-tools',this)"><span class="sb-icon">&#x1f6e0;</span>工具处理</button>
+    <button class="sb-item" onclick="navTo('s-vision',this)"><span class="sb-icon">&#x1f441;</span>视觉处理</button>
+    <button class="sb-item" onclick="navTo('s-logging',this)"><span class="sb-icon">&#x1f4c4;</span>日志持久化</button>
+    <button class="sb-item" onclick="navTo('s-fp',this)"><span class="sb-icon">&#x1f310;</span>浏览器指纹</button>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="content" id="mainContent">
+    <!-- ===== 数据统计 ===== -->
+    <section class="section" id="s-stats">
+      <div class="sec-hdr"><span class="sec-icon">&#x1f4ca;</span><span class="sec-title">数据统计</span><span class="sec-desc" id="statsUptime"></span></div>
+      <div class="sec-body">
+        <div class="stats-grid" id="statsGrid">
+          <div class="stat-card">
+            <div class="stat-val" id="st-total">-</div>
+            <div class="stat-lbl">总请求数</div>
+          </div>
+          <div class="stat-card green">
+            <div class="stat-val" id="st-success">-</div>
+            <div class="stat-lbl">成功</div>
+          </div>
+          <div class="stat-card red">
+            <div class="stat-val" id="st-error">-</div>
+            <div class="stat-lbl">失败</div>
+          </div>
+          <div class="stat-card blue">
+            <div class="stat-val" id="st-today">-</div>
+            <div class="stat-lbl">今日请求</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-val" id="st-7d">-</div>
+            <div class="stat-lbl">近7天</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-val" id="st-30d">-</div>
+            <div class="stat-lbl">近30天</div>
+          </div>
+          <div class="stat-card purple">
+            <div class="stat-val" id="st-chars">-</div>
+            <div class="stat-lbl">总输出字符</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-val" id="st-thinking">-</div>
+            <div class="stat-lbl">Thinking 字符</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-val" id="st-tools">-</div>
+            <div class="stat-lbl">工具调用次数</div>
+          </div>
+          <div class="stat-card yellow">
+            <div class="stat-val" id="st-avg">-</div>
+            <div class="stat-lbl">平均响应时间</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-val" id="st-ttft">-</div>
+            <div class="stat-lbl">平均 TTFT</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-val" id="st-retries">-</div>
+            <div class="stat-lbl">重试/续写次数</div>
+          </div>
+        </div>
+        <div class="stats-detail">
+          <div class="stats-section">
+            <div class="stats-section-title">API 格式分布</div>
+            <div class="stats-bars" id="formatBars"></div>
+          </div>
+          <div class="stats-section">
+            <div class="stats-section-title">请求成功率</div>
+            <div class="stats-rate" id="successRate"></div>
+          </div>
+        </div>
+        <div class="stats-footer">
+          <button class="btn-sm" onclick="loadStats()">&#x1f504; 刷新统计</button>
+          <span class="stats-hint">统计数据来自内存，重启后仅保留持久化日志中的数据</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="warn-banner" id="noAuthWarn" style="display:none">
+      <span class="wi">&#x26a0;&#xfe0f;</span>
+      <span>当前未配置 <b>auth_tokens</b>，管理面板对所有人开放。建议添加访问 Token 以保护服务安全。</span>
+    </div>
+
+    <section class="section" id="s-basic">
+      <div class="sec-hdr"><span class="sec-icon">&#x1f527;</span><span class="sec-title">基础设置</span><span class="sec-desc">端口 / 超时 / 代理</span></div>
+      <div class="sec-body">
+        <div class="field-row">
+          <div class="field">
+            <label class="lbl">端口 <span class="lbl-hint">PORT</span></label>
+            <input type="number" id="f-port" min="1" max="65535" placeholder="3010">
+            <div class="field-hint">服务监听端口，修改后需重启才能生效</div>
+          </div>
+          <div class="field">
+            <label class="lbl">超时 <span class="lbl-hint">TIMEOUT（秒）</span></label>
+            <input type="number" id="f-timeout" min="1" placeholder="120">
+            <div class="field-hint">单次请求最大等待时间（秒）</div>
+          </div>
+        </div>
+        <div class="field">
+          <label class="lbl">全局代理 <span class="lbl-hint">可选</span></label>
+          <input type="text" id="f-proxy" placeholder="http://127.0.0.1:7890" class="mono">
+          <div class="field-hint">格式：http://host:port 或 http://user:pass@host:port，留空不使用代理</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="s-auth">
+      <div class="sec-hdr"><span class="sec-icon">&#x1f511;</span><span class="sec-title">鉴权配置</span><span class="sec-desc">API 访问 Token</span></div>
+      <div class="sec-body">
+        <div class="field">
+          <label class="lbl">Auth Tokens <span class="lbl-hint">每行一个</span></label>
+          <textarea id="f-authTokens" placeholder="sk-your-token-1&#10;sk-your-token-2" rows="4"></textarea>
+          <div class="field-hint">配置后所有 POST 请求必须携带 Bearer Token。留空则完全开放（公网部署不建议）。</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="s-model">
+      <div class="sec-hdr"><span class="sec-icon">&#x1f916;</span><span class="sec-title">模型与请求控制</span><span class="sec-desc">Cursor 模型 / 自动续写 / 历史消息</span></div>
+      <div class="sec-body">
+        <div class="field">
+          <label class="lbl">Cursor 模型 <span class="lbl-hint">CURSOR_MODEL</span></label>
+          <input type="text" id="f-cursorModel" placeholder="anthropic/claude-sonnet-4.6" class="mono">
+          <div class="field-hint">常用：anthropic/claude-sonnet-4.6、anthropic/claude-opus-4-5</div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label class="lbl">最大自动续写次数 <span class="lbl-hint">MAX_AUTO_CONTINUE</span></label>
+            <input type="number" id="f-maxAutoContinue" min="0" max="10" placeholder="0">
+            <div class="field-hint">0 = 禁用（推荐），1~3 = 内部自动续写</div>
+          </div>
+          <div class="field">
+            <label class="lbl">历史消息上限 <span class="lbl-hint">MAX_HISTORY_MESSAGES</span></label>
+            <input type="number" id="f-maxHistoryMessages" min="-1" placeholder="-1">
+            <div class="field-hint">-1 = 不限制，超过则删最早消息</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="s-thinking">
+      <div class="sec-hdr"><span class="sec-icon">&#x1f9e0;</span><span class="sec-title">Thinking 设置</span><span class="sec-desc">最高优先级，覆盖客户端请求</span></div>
+      <div class="sec-body">
+        <div class="field">
+          <label class="lbl">Thinking 覆盖模式 <span class="lbl-hint">THINKING_ENABLED</span></label>
+          <select id="f-thinking">
+            <option value="none">跟随客户端（默认，不覆盖）</option>
+            <option value="true">强制启用（即使客户端未请求也注入）</option>
+            <option value="false">强制关闭（即使客户端请求了也屏蔽）</option>
+          </select>
+          <div class="field-hint">优先级高于客户端 thinking 参数，慎用「强制启用」（会增加 Token 消耗）</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="s-compression">
+      <div class="sec-hdr"><span class="sec-icon">&#x1f4e6;</span><span class="sec-title">历史消息压缩</span><span class="sec-desc">防止超长对话导致上下文溢出</span></div>
+      <div class="sec-body">
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-lbl">启用消息压缩</div>
+            <div class="toggle-desc">对话过长时自动压缩早期消息，释放输出空间</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="f-compressionEnabled"><span class="toggle-track"></span></label>
+        </div>
+        <div class="field-row3">
+          <div class="field">
+            <label class="lbl">压缩级别</label>
+            <select id="f-compressionLevel">
+              <option value="1">1 - 轻度（默认）</option>
+              <option value="2">2 - 中等</option>
+              <option value="3">3 - 激进</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="lbl">保留最近 N 条</label>
+            <input type="number" id="f-compressionKeepRecent" min="1" placeholder="10">
+          </div>
+          <div class="field">
+            <label class="lbl">早期消息最大字符数</label>
+            <input type="number" id="f-compressionEarlyChars" min="100" placeholder="4000">
+          </div>
+        </div>
+        <div class="field-hint">级别预设：1=保留10条/4000字符，2=保留6条/2000字符，3=保留4条/1000字符</div>
+      </div>
+    </section>
+
+    <section class="section" id="s-tools">
+      <div class="sec-hdr"><span class="sec-icon">&#x1f6e0;</span><span class="sec-title">工具处理配置</span><span class="sec-desc">控制工具定义如何传递给模型</span></div>
+      <div class="sec-body">
+        <div class="field-row">
+          <div class="field">
+            <label class="lbl">Schema 呈现模式</label>
+            <select id="f-toolsSchema">
+              <option value="full">full - 完整 JSON Schema（默认，最精确）</option>
+              <option value="compact">compact - TypeScript 风格紧凑签名（体积最小）</option>
+              <option value="names_only">names_only - 只输出工具名和描述（极致省 Token）</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="lbl">描述截断长度 <span class="lbl-hint">0=不截断</span></label>
+            <input type="number" id="f-toolsDescLen" min="0" placeholder="0">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label class="lbl">白名单 include_only <span class="lbl-hint">每行一个</span></label>
+            <textarea id="f-toolsInclude" placeholder="留空则保留所有工具" rows="4"></textarea>
+            <div class="field-hint">只保留指定工具名，适合排除大量不需要的 MCP 工具</div>
+          </div>
+          <div class="field">
+            <label class="lbl">黑名单 exclude <span class="lbl-hint">每行一个</span></label>
+            <textarea id="f-toolsExclude" placeholder="留空则不排除任何工具" rows="4"></textarea>
+            <div class="field-hint">排除指定工具名，比白名单更灵活</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="s-vision">
+      <div class="sec-hdr"><span class="sec-icon">&#x1f441;</span><span class="sec-title">视觉处理降级</span><span class="sec-desc">拦截图片进行 OCR 或 API 降级</span></div>
+      <div class="sec-body">
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-lbl">启用视觉处理</div>
+            <div class="toggle-desc">拦截发给模型的图片，进行 OCR 文字提取或调用外部视觉 API</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="f-visionEnabled"><span class="toggle-track"></span></label>
+        </div>
+        <div class="field">
+          <label class="lbl">处理模式</label>
+          <select id="f-visionMode" onchange="onVisionModeChange()">
+            <option value="ocr">ocr - 本机 CPU 识图，零配置免 Key（默认）</option>
+            <option value="api">api - 调用外部视觉模型（需配置 API Key）</option>
+          </select>
+        </div>
+        <div id="vision-api-fields">
+          <div class="field-row">
+            <div class="field">
+              <label class="lbl">Base URL</label>
+              <input type="text" id="f-visionBaseUrl" placeholder="https://api.openai.com/v1/chat/completions" class="mono">
+            </div>
+            <div class="field">
+              <label class="lbl">模型</label>
+              <input type="text" id="f-visionModel" placeholder="gpt-4o-mini" class="mono">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label class="lbl">API Key</label>
+              <input type="password" id="f-visionApiKey" placeholder="sk-...">
+            </div>
+            <div class="field">
+              <label class="lbl">独立代理 <span class="lbl-hint">可选</span></label>
+              <input type="text" id="f-visionProxy" placeholder="http://127.0.0.1:7890" class="mono">
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="s-logging">
+      <div class="sec-hdr"><span class="sec-icon">&#x1f4c4;</span><span class="sec-title">日志持久化</span><span class="sec-desc">重启后自动加载历史记录</span></div>
+      <div class="sec-body">
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-lbl">启用日志文件持久化</div>
+            <div class="toggle-desc">开启后日志写入文件，重启服务后历史记录不丢失</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="f-loggingEnabled"><span class="toggle-track"></span></label>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label class="lbl">日志目录</label>
+            <input type="text" id="f-loggingDir" placeholder="./logs" class="mono">
+          </div>
+          <div class="field">
+            <label class="lbl">保留天数</label>
+            <input type="number" id="f-loggingMaxDays" min="1" placeholder="7">
+            <div class="field-hint">超过天数的日志文件自动清理</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="s-fp">
+      <div class="sec-hdr"><span class="sec-icon">&#x1f310;</span><span class="sec-title">浏览器指纹</span><span class="sec-desc">模拟 Cursor 浏览器请求头</span></div>
+      <div class="sec-body">
+        <div class="field">
+          <label class="lbl">User-Agent</label>
+          <textarea id="f-userAgent" rows="2"></textarea>
+          <div class="field-hint">模拟 Cursor 客户端的浏览器 UA，一般无需修改</div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- Fixed Action Bar -->
+<div class="action-bar">
+  <button class="btn-save" id="saveBtn" onclick="saveConfig()">&#x1f4be; 保存并立即生效</button>
+  <button class="btn-reload" onclick="reloadConfig()">&#x1f504; 从文件重新加载</button>
+  <span class="action-tip">保存后配置立即生效，无需重启服务</span>
+  <span class="save-status" id="saveStatus"></span>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="/public/admin.js"></script>
+</body>
+</html>

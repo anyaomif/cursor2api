@@ -33,13 +33,14 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#e0e7ff 0%
   <div class="err" id="errMsg">Token 无效，请检查后重试</div>
 </div>
 <script>
+const _redir=new URLSearchParams(window.location.search).get('redirect')||'/logs';
 const saved=localStorage.getItem('cursor2api_token');
-if(saved)window.location.href='/logs?token='+encodeURIComponent(saved);
+if(saved)window.location.href=_redir+'?token='+encodeURIComponent(saved);
 document.getElementById('tokenIn').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
 async function doLogin(){
   const token=document.getElementById('tokenIn').value.trim();if(!token)return;
   try{const r=await fetch('/api/stats?token='+encodeURIComponent(token));
-  if(r.ok){localStorage.setItem('cursor2api_token',token);window.location.href='/logs?token='+encodeURIComponent(token)}
+  if(r.ok){localStorage.setItem('cursor2api_token',token);window.location.href=_redir+'?token='+encodeURIComponent(token)}
   else{document.getElementById('errMsg').style.display='block'}}
   catch{document.getElementById('errMsg').style.display='block'}
 }

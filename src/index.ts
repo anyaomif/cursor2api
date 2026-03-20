@@ -12,6 +12,7 @@ import { getConfig, initConfigWatcher, stopConfigWatcher } from './config.js';
 import { handleMessages, listModels, countTokens } from './handler.js';
 import { handleOpenAIChatCompletions, handleOpenAIResponses } from './openai-handler.js';
 import { serveLogViewer, apiGetLogs, apiGetRequests, apiGetStats, apiGetPayload, apiLogsStream, serveLogViewerLogin, apiClearLogs, serveVueApp } from './log-viewer.js';
+import { serveAdmin, apiGetConfig, apiUpdateConfig, apiReloadConfig } from './admin.js';
 import { loadLogsFromFiles } from './logger.js';
 
 // 从 package.json 读取版本号，统一来源，避免多处硬编码
@@ -40,7 +41,7 @@ app.use((_req, res, next) => {
 // ★ 静态文件路由（无需鉴权，CSS/JS 等）
 app.use('/public', express.static('public'));
 
-// ★ 日志查看器鉴权中间件：配置了 authTokens 时需要验证
+// ★ 日志查看器 & 管理面板鉴权中间件：配置了 authTokens 时需要验证
 const logViewerAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
     const tokens = getConfig().authTokens;
     if (!tokens || tokens.length === 0) return next(); // 未配置 token 则放行
@@ -52,15 +53,19 @@ const logViewerAuth = (req: express.Request, res: express.Response, next: expres
     const token = tokenFromQuery || tokenFromHeader;
 
     if (!token || !tokens.includes(token)) {
-        // HTML 页面请求 → 返回登录页; API 请求 → 返回 JSON 错误
-        if (req.path === '/logs') {
-            return serveLogViewerLogin(req, res);
+        // 对页面请求重定向到登录页（携带原始路径），对 API 请求返回 401
+        if (req.path.startsWith('/api/')) {
+            res.status(401).json({ error: 'Unauthorized' });
+        } else {
+            res.redirect('/login?redirect=' + encodeURIComponent(req.path));
         }
-        res.status(401).json({ error: { message: 'Unauthorized. Provide token via ?token=xxx or Authorization header.', type: 'auth_error' } });
         return;
     }
     next();
 };
+
+// ★ 登录页（无需鉴权）
+app.get('/login', serveLogViewerLogin);
 
 // ★ 日志查看器路由（带鉴权）
 app.get('/logs', logViewerAuth, serveLogViewer);
@@ -72,6 +77,12 @@ app.get('/api/stats', logViewerAuth, apiGetStats);
 app.get('/api/payload/:requestId', logViewerAuth, apiGetPayload);
 app.get('/api/logs/stream', logViewerAuth, apiLogsStream);
 app.post('/api/logs/clear', logViewerAuth, apiClearLogs);
+
+// ★ 管理面板路由（带鉴权）
+app.get('/admin', logViewerAuth, serveAdmin);
+app.get('/api/config', logViewerAuth, apiGetConfig);
+app.post('/api/config', logViewerAuth, apiUpdateConfig);
+app.post('/api/config/reload', logViewerAuth, apiReloadConfig);
 
 // ★ API 鉴权中间件：配置了 authTokens 则需要 Bearer token
 app.use((req, res, next) => {
@@ -137,6 +148,7 @@ app.get('/', (_req, res) => {
             health: 'GET /health',
             log_viewer: 'GET /logs',
             log_viewer_vue: 'GET /vuelogs',
+            admin_panel: 'GET /admin',
         },
         usage: {
             claude_code: 'export ANTHROPIC_BASE_URL=http://localhost:' + config.port,
@@ -154,7 +166,7 @@ loadLogsFromFiles();
 app.listen(config.port, () => {
     const auth = config.authTokens?.length ? `${config.authTokens.length} token(s)` : 'open';
     const logPersist = config.logging?.file_enabled ? `file → ${config.logging.dir}` : 'memory only';
-    
+
     // Tools 配置摘要
     const toolsCfg = config.tools;
     let toolsInfo = 'default (full, desc=full)';
@@ -172,7 +184,7 @@ app.listen(config.port, () => {
             toolsInfo = parts.join(', ');
         }
     }
-    
+
     console.log('');
     console.log(`  \x1b[36m⚡ Cursor2API v${VERSION}\x1b[0m`);
     console.log(`  ├─ Server:  \x1b[32mhttp://localhost:${config.port}\x1b[0m`);
@@ -180,8 +192,9 @@ app.listen(config.port, () => {
     console.log(`  ├─ Auth:    ${auth}`);
     console.log(`  ├─ Tools:   ${toolsInfo}`);
     console.log(`  ├─ Logging: ${logPersist}`);
-    console.log(`  └─ Logs:    \x1b[35mhttp://localhost:${config.port}/logs\x1b[0m`);
-    console.log(`  └─ Logs Vue3: \x1b[35mhttp://localhost:${config.port}/vuelogs\x1b[0m`);
+    console.log(`  ├─ Logs:    \x1b[35mhttp://localhost:${config.port}/logs\x1b[0m`);
+    console.log(`  ├─ Logs Vue3: \x1b[35mhttp://localhost:${config.port}/vuelogs\x1b[0m`);
+    console.log(`  └─ Admin:   \x1b[33mhttp://localhost:${config.port}/admin\x1b[0m`);
     console.log('');
 
     // ★ 启动 config.yaml 热重载监听

@@ -259,13 +259,41 @@ export function clearAllLogs(): { cleared: number } {
 export function getStats() {
     let success = 0, error = 0, intercepted = 0, processing = 0;
     let totalTime = 0, timeCount = 0, totalTTFT = 0, ttftCount = 0;
+    let totalResponseChars = 0, totalThinkingChars = 0;
+    let totalToolCalls = 0, totalRetries = 0, totalContinuations = 0;
+    let minTime = Infinity, maxTime = 0;
+    const modelCounts: Record<string, number> = {};
+    const formatCounts: Record<string, number> = { anthropic: 0, openai: 0, responses: 0 };
+    const now = Date.now();
+    const cut1d = now - 86400000;
+    const cut7d = now - 7 * 86400000;
+    const cut30d = now - 30 * 86400000;
+    let todayCount = 0, last7dCount = 0, last30dCount = 0;
+
     for (const s of requestSummaries.values()) {
         if (s.status === 'success') success++;
         else if (s.status === 'error') error++;
         else if (s.status === 'intercepted') intercepted++;
         else if (s.status === 'processing') processing++;
-        if (s.endTime) { totalTime += s.endTime - s.startTime; timeCount++; }
+        if (s.endTime) {
+            const dur = s.endTime - s.startTime;
+            totalTime += dur; timeCount++;
+            if (dur < minTime) minTime = dur;
+            if (dur > maxTime) maxTime = dur;
+        }
         if (s.ttft) { totalTTFT += s.ttft; ttftCount++; }
+        totalResponseChars += s.responseChars || 0;
+        totalThinkingChars += s.thinkingChars || 0;
+        totalToolCalls += s.toolCallsDetected || 0;
+        totalRetries += s.retryCount || 0;
+        totalContinuations += s.continuationCount || 0;
+        const m = s.model || 'unknown';
+        modelCounts[m] = (modelCounts[m] || 0) + 1;
+        const fmt = s.apiFormat || 'anthropic';
+        formatCounts[fmt] = (formatCounts[fmt] || 0) + 1;
+        if (s.startTime >= cut1d) todayCount++;
+        if (s.startTime >= cut7d) last7dCount++;
+        if (s.startTime >= cut30d) last30dCount++;
     }
     return {
         totalRequests: requestSummaries.size,
@@ -273,7 +301,20 @@ export function getStats() {
         interceptedCount: intercepted, processingCount: processing,
         avgResponseTime: timeCount > 0 ? Math.round(totalTime / timeCount) : 0,
         avgTTFT: ttftCount > 0 ? Math.round(totalTTFT / ttftCount) : 0,
+        minResponseTime: timeCount > 0 ? minTime : 0,
+        maxResponseTime: timeCount > 0 ? maxTime : 0,
         totalLogEntries: logEntries.length,
+        totalResponseChars,
+        totalThinkingChars,
+        totalToolCalls,
+        totalRetries,
+        totalContinuations,
+        modelCounts,
+        formatCounts,
+        todayCount,
+        last7dCount,
+        last30dCount,
+        uptimeSeconds: Math.floor(process.uptime()),
     };
 }
 

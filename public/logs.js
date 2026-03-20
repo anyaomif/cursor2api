@@ -15,7 +15,11 @@ if (urlToken) localStorage.setItem('cursor2api_token', urlToken);
 const authToken = localStorage.getItem('cursor2api_token') || '';
 function authQ(base) { return authToken ? (base.includes('?') ? base + '&token=' : base + '?token=') + encodeURIComponent(authToken) : base; }
 function logoutBtn() {
+  // 如果有 token，动态更新管理面板导航链接（带上 token 参数）
   if (authToken) {
+    const adminBtn = document.getElementById('adminNavBtn');
+    if (adminBtn) adminBtn.href = '/admin?token=' + encodeURIComponent(authToken);
+    // 退出按钮
     const b = document.createElement('button');
     b.textContent = '退出';
     b.className = 'hdr-btn';
