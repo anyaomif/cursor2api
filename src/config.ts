@@ -155,9 +155,18 @@ export function getConfig(): AppConfig {
 export function updateConfig(patch: Record<string, unknown>): AppConfig {
     const current = getConfig();
     const merged: Record<string, unknown> = { ...(current as unknown as Record<string, unknown>) };
+    // 嵌套对象列表：做深合并而非整体替换，避免只传部分字段时丢失其余子字段
+    const nestedKeys = new Set(['vision', 'compression', 'thinking', 'logging', 'tools', 'fingerprint']);
     for (const [key, val] of Object.entries(patch)) {
         if (val === null || val === undefined) {
             delete merged[key];
+        } else if (
+            nestedKeys.has(key) &&
+            typeof val === 'object' && !Array.isArray(val) &&
+            merged[key] && typeof merged[key] === 'object' && !Array.isArray(merged[key])
+        ) {
+            // 深合并：保留现有子字段，只覆盖 patch 中提供的部分
+            merged[key] = { ...(merged[key] as Record<string, unknown>), ...(val as Record<string, unknown>) };
         } else {
             merged[key] = val;
         }
@@ -252,9 +261,15 @@ export function initConfigWatcher(): void {
     if (configWatcher) return; // 已启动
     if (!existsSync('config.yaml')) return;
     try {
+        let debounceTimer: ReturnType<typeof setTimeout> | null = null;
         configWatcher = watch('config.yaml', () => {
-            console.log('[Config] 检测到 config.yaml 变化，自动重载配置...');
-            reloadConfig();
+            // debounce：编辑器保存时 fs.watch 可能连续触发多次，延迟 300ms 合并为一次
+            if (debounceTimer) clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                console.log('[Config] 检测到 config.yaml 变化，自动重载配置...');
+                reloadConfig();
+                debounceTimer = null;
+            }, 300);
         });
         console.log('[Config] 已启动 config.yaml 文件监听');
     } catch (e) {

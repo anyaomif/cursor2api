@@ -64,8 +64,19 @@ export function apiUpdateConfig(req: Request, res: Response): void {
             return;
         }
 
+        // ★ 防止掩码 token 覆盖真实 token：
+        //   GET /api/config 返回的是脱敏值（含 ****），前端原样 POST 回来时跳过该字段
+        const patch = { ...body } as Record<string, unknown>;
+        if (Array.isArray(patch.authTokens)) {
+            const isMasked = (patch.authTokens as string[]).some(t => t.includes('****'));
+            if (isMasked) {
+                // 含掩码，说明用户未修改 token，保留现有值
+                delete patch.authTokens;
+            }
+        }
+
         // 热更新内存 config
-        updateConfig(body);
+        updateConfig(patch);
         // 持久化到 config.yaml
         saveConfig();
 
