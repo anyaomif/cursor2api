@@ -140,6 +140,10 @@ export interface AppConfig {
     };
     sanitizeEnabled: boolean;    // 是否启用响应内容清洗（替换 Cursor 身份引用为 Claude），默认 false
     refusalPatterns?: string[];  // 自定义拒绝检测规则（追加到内置列表之后）
+    identityProbe?: {
+        enabled: boolean;          // 是否启用身份探针拦截，默认 true
+        customPatterns?: string[]; // 自定义探针规则（正则字符串，追加到内置列表）
+    };
     fingerprint: {
         userAgent: string;
     };

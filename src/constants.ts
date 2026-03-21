@@ -185,8 +185,8 @@ export function isRefusal(text: string): boolean {
 // 用户消息匹配以下模式时判定为身份探针，直接返回 mock 回复
 
 export const IDENTITY_PROBE_PATTERNS: RegExp[] = [
-    // 精确短句
-    /^\s*(who are you\??|你是谁[呀啊吗]?\??|what is your name\??|你叫什么\??|你叫什么名字\??|what are you\??|你是什么\??|Introduce yourself\??|自我介绍一下\??|hi\??|hello\??|hey\??|你好\??|在吗\??|哈喽\??)\s*$/i,
+    // 精确短句（仅保留明确询问身份的短句，移除普通问候语）
+    /^\s*(who are you\??|你是谁[呀啊吗]?\??|what is your name\??|你叫什么\??|你叫什么名字\??|what are you\??|你是什么[^\S\r\n]*\??|Introduce yourself\??|自我介绍一下\??)\s*$/i,
     // 问模型/身份类
     /(?:什么|哪个|啥)\s*模型/,
     /(?:真实|底层|实际|真正).{0,10}(?:模型|身份|名字)/,
@@ -204,7 +204,9 @@ export const IDENTITY_PROBE_PATTERNS: RegExp[] = [
     /system\s*prompt/i,
     // "你是谁"的变体
     /你\s*(?:到底|究竟|真的|真实)\s*是\s*谁/,
-    /你\s*是[^。，,\.]{0,5}(?:AI|人工智能|助手|机器人|模型|Claude|GPT|Gemini)/i,
+    // 明确问是否是某个 AI 模型身份（收紧：需要带询问语气词或问号）
+    /你\s*是(?:不是|否)\s*(?:Claude|GPT|Gemini|ChatGPT|OpenAI|Anthropic)/i,
+    /你\s*是[^。，,\.]{0,5}(?:Claude|GPT|Gemini)\s*[\?？]/i,
     // 注意：工具能力询问不在这里拦截，由拒绝检测+重试自然处理
 ];
 

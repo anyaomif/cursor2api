@@ -1,16 +1,13 @@
 port: 9000
 timeout: 120
 cursor_model: anthropic/claude-sonnet-4.6
-max_auto_continue: 0
+max_auto_continue: 3
 max_history_messages: -1
 auth_tokens:
   - sk-123456
-  - sk-ayao
 fingerprint:
   user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
     like Gecko) Chrome/140.0.0.0 Safari/537.36
-thinking:
-  enabled: false
 compression:
   enabled: false
   level: 1
@@ -26,6 +23,6 @@ vision:
   api_key: ""
   model: gpt-4o-mini
 logging:
-  file_enabled: false
+  file_enabled: true
   dir: ./logs
   max_days: 7

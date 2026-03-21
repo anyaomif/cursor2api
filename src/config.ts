@@ -47,6 +47,15 @@ function loadConfigFromSources(): AppConfig {
             }
             if (typeof yaml.sanitize_enabled === 'boolean') c.sanitizeEnabled = yaml.sanitize_enabled;
             if (Array.isArray(yaml.refusal_patterns)) c.refusalPatterns = yaml.refusal_patterns.map(String);
+            // ★ 身份探针拦截配置
+            if (yaml.identity_probe !== undefined) {
+                c.identityProbe = {
+                    enabled: yaml.identity_probe.enabled !== false,
+                    customPatterns: Array.isArray(yaml.identity_probe.custom_patterns)
+                        ? yaml.identity_probe.custom_patterns.map(String)
+                        : undefined,
+                };
+            }
             // ★ API 鉴权 token
             if (yaml.auth_tokens) {
                 c.authTokens = Array.isArray(yaml.auth_tokens)
@@ -156,7 +165,7 @@ export function updateConfig(patch: Record<string, unknown>): AppConfig {
     const current = getConfig();
     const merged: Record<string, unknown> = { ...(current as unknown as Record<string, unknown>) };
     // 嵌套对象列表：做深合并而非整体替换，避免只传部分字段时丢失其余子字段
-    const nestedKeys = new Set(['vision', 'compression', 'thinking', 'logging', 'tools', 'fingerprint']);
+    const nestedKeys = new Set(['vision', 'compression', 'thinking', 'logging', 'tools', 'fingerprint', 'identityProbe']);
     for (const [key, val] of Object.entries(patch)) {
         if (val === null || val === undefined) {
             delete merged[key];
@@ -239,6 +248,11 @@ export function saveConfig(): void {
     }
     if (c.sanitizeEnabled) yamlObj.sanitize_enabled = c.sanitizeEnabled;
     if (c.refusalPatterns?.length) yamlObj.refusal_patterns = c.refusalPatterns;
+    if (c.identityProbe !== undefined) {
+        const ip: Record<string, unknown> = { enabled: c.identityProbe.enabled };
+        if (c.identityProbe.customPatterns?.length) ip.custom_patterns = c.identityProbe.customPatterns;
+        yamlObj.identity_probe = ip;
+    }
     writeFileSync('config.yaml', stringifyYaml(yamlObj), 'utf-8');
     console.log('[Config] 配置已保存到 config.yaml');
 }

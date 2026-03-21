@@ -117,6 +117,11 @@ function populateForm(cfg){
   // Sanitize
   setChk('f-sanitizeEnabled', cfg.sanitizeEnabled===true);
   setVal('f-refusalPatterns', (cfg.refusalPatterns||[]).join('\n'));
+
+  // Identity Probe
+  const probe=cfg.identityProbe||{};
+  setChk('f-probeEnabled', probe.enabled!==false);
+  setVal('f-probePatterns', (probe.customPatterns||[]).join('\n'));
 }
 
 function setVal(id,val){
@@ -205,6 +210,13 @@ function buildConfig(){
   cfg.sanitizeEnabled=getChk('f-sanitizeEnabled');
   const refusalLines=getLines('f-refusalPatterns');
   cfg.refusalPatterns=refusalLines.length?refusalLines:null;
+
+  // Identity Probe
+  const probePatterns=getLines('f-probePatterns');
+  cfg.identityProbe={
+    enabled:getChk('f-probeEnabled'),
+    customPatterns:probePatterns.length?probePatterns:null,
+  };
 
   return cfg;
 }
@@ -319,7 +331,7 @@ async function init(){
 }
 
 // ===== Scroll spy for sidebar active state =====
-const sections=['s-stats','s-basic','s-auth','s-model','s-thinking','s-compression','s-tools','s-vision','s-logging','s-fp'];
+const sections=['s-stats','s-basic','s-auth','s-model','s-thinking','s-compression','s-tools','s-vision','s-logging','s-fp','s-probe','s-sanitize'];
 const content=document.getElementById('mainContent');
 if(content){
   content.addEventListener('scroll',()=>{

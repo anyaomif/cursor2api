@@ -127,6 +127,10 @@ export function countTokens(req: Request, res: Response): void {
 // ==================== 身份探针拦截 ====================
 
 export function isIdentityProbe(body: AnthropicRequest): boolean {
+    // ★ 配置开关：identity_probe.enabled === false 时完全禁用身份探针拦截
+    const probeConfig = getConfig().identityProbe;
+    if (probeConfig && probeConfig.enabled === false) return false;
+
     if (!body.messages || body.messages.length === 0) return false;
     const lastMsg = body.messages[body.messages.length - 1];
     if (lastMsg.role !== 'user') return false;
@@ -143,7 +147,19 @@ export function isIdentityProbe(body: AnthropicRequest): boolean {
     // 如果有工具定义(agent模式)，不拦截身份探针（让agent正常工作）
     if (body.tools && body.tools.length > 0) return false;
 
-    return IDENTITY_PROBE_PATTERNS.some(p => p.test(text));
+    // 内置规则检测
+    if (IDENTITY_PROBE_PATTERNS.some(p => p.test(text))) return true;
+
+    // ★ 自定义探针规则（从 config 读取，支持热重载）
+    if (probeConfig?.customPatterns?.length) {
+        for (const pat of probeConfig.customPatterns) {
+            try {
+                if (new RegExp(pat, 'i').test(text)) return true;
+            } catch { /* 无效正则跳过 */ }
+        }
+    }
+
+    return false;
 }
 
 export function isToolCapabilityQuestion(body: AnthropicRequest): boolean {

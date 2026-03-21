@@ -39,6 +39,7 @@
     <button class="sb-item" onclick="navTo('s-vision',this)"><span class="sb-icon">&#x1f441;</span>视觉处理</button>
     <button class="sb-item" onclick="navTo('s-logging',this)"><span class="sb-icon">&#x1f4c4;</span>日志持久化</button>
     <button class="sb-item" onclick="navTo('s-fp',this)"><span class="sb-icon">&#x1f310;</span>浏览器指纹</button>
+    <button class="sb-item" onclick="navTo('s-probe',this)"><span class="sb-icon">&#x1f50d;</span>身份探针</button>
     <button class="sb-item" onclick="navTo('s-sanitize',this)"><span class="sb-icon">&#x1f9f9;</span>响应清洗</button>
   </nav>
 
@@ -345,6 +346,24 @@
           <label class="lbl">User-Agent</label>
           <textarea id="f-userAgent" rows="2"></textarea>
           <div class="field-hint">模拟 Cursor 客户端的浏览器 UA，一般无需修改</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="s-probe">
+      <div class="sec-hdr"><span class="sec-icon">&#x1f50d;</span><span class="sec-title">身份探针拦截</span><span class="sec-desc">控制身份询问短路拦截，支持自定义规则</span></div>
+      <div class="sec-body">
+        <div class="toggle-row">
+          <input type="checkbox" id="f-probeEnabled" class="toggle-chk" checked>
+          <div class="toggle-info">
+            <div class="toggle-lbl">启用身份探针拦截</div>
+            <div class="toggle-desc">开启后检测到"你是谁"等身份询问时直接返回 Claude 身份回复，不转发到 Cursor API（关闭后所有询问均正常转发）</div>
+          </div>
+        </div>
+        <div class="field" style="margin-top:12px">
+          <label class="lbl">自定义探针规则 <span class="lbl-hint">每行一个正则</span></label>
+          <textarea id="f-probePatterns" placeholder="留空则只使用内置规则" rows="5" class="mono"></textarea>
+          <div class="field-hint">追加到内置探针检测列表之后，命中则直接返回 Claude 身份回复</div>
         </div>
       </div>
     </section>
