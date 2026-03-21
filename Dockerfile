@@ -21,29 +21,22 @@ WORKDIR /app
 # 设置为生产环境
 ENV NODE_ENV=production
 
-# 出于安全考虑，避免使用 root 用户运行服务
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 cursor
-
 # 拷贝包配置并仅安装生产环境依赖（极大减小镜像体积）
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev \
     && npm cache clean --force
 
 # 从 builder 阶段拷贝编译后的产物
-COPY --from=builder --chown=cursor:nodejs /app/dist ./dist
+COPY --from=builder /app/dist ./dist
 
 # 拷贝前端静态资源（日志查看器 Web UI）
-COPY --chown=cursor:nodejs public ./public
+COPY public ./public
 
-# 创建日志目录并授权
-RUN mkdir -p /app/logs && chown cursor:nodejs /app/logs
+# 创建日志目录
+RUN mkdir -p /app/logs
 
 # 注意：config.yaml 不打包进镜像，通过 docker-compose volumes 挂载
 # 如果未挂载，服务会使用内置默认值 + 环境变量
-
-# 切换到非 root 用户
-USER cursor
 
 # 声明对外暴露的端口和持久化卷
 EXPOSE 3010
