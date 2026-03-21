@@ -41,7 +41,7 @@ services:
       # - MAX_HISTORY_MESSAGES=-1      # 历史消息条数上限，-1=不限制
 
       # ── 日志持久化 ──
-      # - LOG_FILE_ENABLED=true
+      - LOG_FILE_ENABLED=true
       # - LOG_DIR=./logs
 
       # ── 浏览器指纹（base64 JSON） ──

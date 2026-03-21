@@ -15,7 +15,7 @@
 
 import { EventEmitter } from 'events';
 import { existsSync, mkdirSync, appendFileSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'fs';
-import { join, basename } from 'path';
+import { join, basename, dirname } from 'path';
 import { getConfig } from './config.js';
 
 // ==================== 类型定义 ====================
@@ -124,6 +124,108 @@ const requestOrder: string[] = [];
 const logEmitter = new EventEmitter();
 logEmitter.setMaxListeners(50);
 
+// ==================== 统计快照持久化 ====================
+
+interface StatsAccumulator {
+    totalRequests: number;
+    successCount: number;
+    errorCount: number;
+    interceptedCount: number;
+    totalResponseChars: number;
+    totalThinkingChars: number;
+    totalToolCalls: number;
+    totalRetries: number;
+    totalContinuations: number;
+    totalTime: number;
+    timeCount: number;
+    totalTTFT: number;
+    ttftCount: number;
+    modelCounts: Record<string, number>;
+    formatCounts: Record<string, number>;
+    dailyCounts: Record<string, number>; // 'YYYY-MM-DD' -> count
+}
+
+function emptyAccumulator(): StatsAccumulator {
+    return {
+        totalRequests: 0, successCount: 0, errorCount: 0, interceptedCount: 0,
+        totalResponseChars: 0, totalThinkingChars: 0, totalToolCalls: 0,
+        totalRetries: 0, totalContinuations: 0,
+        totalTime: 0, timeCount: 0, totalTTFT: 0, ttftCount: 0,
+        modelCounts: {}, formatCounts: { anthropic: 0, openai: 0, responses: 0 },
+        dailyCounts: {},
+    };
+}
+
+let statsAccumulator: StatsAccumulator = emptyAccumulator();
+
+function getSnapshotPath(): string {
+    const cfg = getConfig();
+    const dir = cfg.logging?.dir || './logs';
+    return join(dir, 'stats-snapshot.json');
+}
+
+export function loadStatsSnapshot(): void {
+    try {
+        const path = getSnapshotPath();
+        if (!existsSync(path)) return;
+        const data = JSON.parse(readFileSync(path, 'utf-8')) as Partial<StatsAccumulator>;
+        statsAccumulator = {
+            ...emptyAccumulator(),
+            ...data,
+            modelCounts: data.modelCounts || {},
+            formatCounts: { anthropic: 0, openai: 0, responses: 0, ...(data.formatCounts || {}) },
+            dailyCounts: data.dailyCounts || {},
+        };
+        console.log(`[Logger] 统计快照已加载（累计 ${statsAccumulator.totalRequests} 条历史请求）`);
+    } catch (e) {
+        console.warn('[Logger] 加载统计快照失败:', e);
+        statsAccumulator = emptyAccumulator();
+    }
+}
+
+let _saveTimer: ReturnType<typeof setTimeout> | null = null;
+function saveStatsSnapshot(): void {
+    if (_saveTimer) clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(() => {
+        try {
+            const path = getSnapshotPath();
+            const dir = dirname(path);
+            if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+            writeFileSync(path, JSON.stringify(statsAccumulator, null, 2), 'utf-8');
+        } catch (e) {
+            console.warn('[Logger] 保存统计快照失败:', e);
+        }
+    }, 2000);
+}
+
+function accumulateSummary(s: RequestSummary): void {
+    statsAccumulator.totalRequests++;
+    if (s.status === 'success') statsAccumulator.successCount++;
+    else if (s.status === 'error') statsAccumulator.errorCount++;
+    else if (s.status === 'intercepted') statsAccumulator.interceptedCount++;
+    if (s.endTime) {
+        statsAccumulator.totalTime += s.endTime - s.startTime;
+        statsAccumulator.timeCount++;
+    }
+    if (s.ttft) { statsAccumulator.totalTTFT += s.ttft; statsAccumulator.ttftCount++; }
+    statsAccumulator.totalResponseChars += s.responseChars || 0;
+    statsAccumulator.totalThinkingChars += s.thinkingChars || 0;
+    statsAccumulator.totalToolCalls += s.toolCallsDetected || 0;
+    statsAccumulator.totalRetries += s.retryCount || 0;
+    statsAccumulator.totalContinuations += s.continuationCount || 0;
+    const m = s.model || 'unknown';
+    statsAccumulator.modelCounts[m] = (statsAccumulator.modelCounts[m] || 0) + 1;
+    const fmt = s.apiFormat || 'anthropic';
+    statsAccumulator.formatCounts[fmt] = (statsAccumulator.formatCounts[fmt] || 0) + 1;
+    const day = new Date(s.startTime).toISOString().slice(0, 10);
+    statsAccumulator.dailyCounts[day] = (statsAccumulator.dailyCounts[day] || 0) + 1;
+    // 保留最近 60 天，清理更旧的
+    const cutoff = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
+    for (const d of Object.keys(statsAccumulator.dailyCounts)) {
+        if (d < cutoff) delete statsAccumulator.dailyCounts[d];
+    }
+}
+
 function shortId(): string {
     const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
     let id = '';
@@ -193,7 +295,7 @@ export function loadLogsFromFiles(): void {
         const validFiles = readdirSync(dir)
             .filter(f => f.startsWith('cursor2api-') && f.endsWith('.jsonl'))
             .sort()
-            .slice(-2);
+            .slice(-7);
         
         let loaded = 0;
         for (const f of validFiles) {
@@ -231,7 +333,7 @@ export function loadLogsFromFiles(): void {
     }
 }
 
-/** 清空所有日志（内存 + 文件） */
+/** 清空所有日志（内存 + 文件 + 统计快照） */
 export function clearAllLogs(): { cleared: number } {
     const count = requestSummaries.size;
     logEntries.length = 0;
@@ -239,7 +341,8 @@ export function clearAllLogs(): { cleared: number } {
     requestPayloads.clear();
     requestOrder.length = 0;
     logCounter = 0;
-    
+    statsAccumulator = emptyAccumulator();
+
     // 清空日志文件
     const dir = getLogDir();
     if (dir && existsSync(dir)) {
@@ -250,67 +353,56 @@ export function clearAllLogs(): { cleared: number } {
             }
         } catch { /* ignore */ }
     }
-    
+
+    // 清空统计快照文件
+    try {
+        const snapshotPath = getSnapshotPath();
+        if (existsSync(snapshotPath)) unlinkSync(snapshotPath);
+    } catch { /* ignore */ }
+
     return { cleared: count };
 }
 
 // ==================== 统计 ====================
 
 export function getStats() {
-    let success = 0, error = 0, intercepted = 0, processing = 0;
-    let totalTime = 0, timeCount = 0, totalTTFT = 0, ttftCount = 0;
-    let totalResponseChars = 0, totalThinkingChars = 0;
-    let totalToolCalls = 0, totalRetries = 0, totalContinuations = 0;
-    let minTime = Infinity, maxTime = 0;
-    const modelCounts: Record<string, number> = {};
-    const formatCounts: Record<string, number> = { anthropic: 0, openai: 0, responses: 0 };
-    const now = Date.now();
-    const cut1d = now - 86400000;
-    const cut7d = now - 7 * 86400000;
-    const cut30d = now - 30 * 86400000;
-    let todayCount = 0, last7dCount = 0, last30dCount = 0;
+    const acc = statsAccumulator;
 
+    // 仅从内存中统计仍在处理中的请求（未完成，尚未进入快照）
+    let processing = 0;
     for (const s of requestSummaries.values()) {
-        if (s.status === 'success') success++;
-        else if (s.status === 'error') error++;
-        else if (s.status === 'intercepted') intercepted++;
-        else if (s.status === 'processing') processing++;
-        if (s.endTime) {
-            const dur = s.endTime - s.startTime;
-            totalTime += dur; timeCount++;
-            if (dur < minTime) minTime = dur;
-            if (dur > maxTime) maxTime = dur;
-        }
-        if (s.ttft) { totalTTFT += s.ttft; ttftCount++; }
-        totalResponseChars += s.responseChars || 0;
-        totalThinkingChars += s.thinkingChars || 0;
-        totalToolCalls += s.toolCallsDetected || 0;
-        totalRetries += s.retryCount || 0;
-        totalContinuations += s.continuationCount || 0;
-        const m = s.model || 'unknown';
-        modelCounts[m] = (modelCounts[m] || 0) + 1;
-        const fmt = s.apiFormat || 'anthropic';
-        formatCounts[fmt] = (formatCounts[fmt] || 0) + 1;
-        if (s.startTime >= cut1d) todayCount++;
-        if (s.startTime >= cut7d) last7dCount++;
-        if (s.startTime >= cut30d) last30dCount++;
+        if (s.status === 'processing') processing++;
     }
+
+    // 时间窗口统计：从快照的 dailyCounts 聚合
+    const today = new Date().toISOString().slice(0, 10);
+    const cut7d = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+    const cut30d = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    let todayCount = 0, last7dCount = 0, last30dCount = 0;
+    for (const [day, cnt] of Object.entries(acc.dailyCounts)) {
+        if (day >= cut30d) last30dCount += cnt;
+        if (day >= cut7d) last7dCount += cnt;
+        if (day === today) todayCount += cnt;
+    }
+
     return {
-        totalRequests: requestSummaries.size,
-        successCount: success, errorCount: error,
-        interceptedCount: intercepted, processingCount: processing,
-        avgResponseTime: timeCount > 0 ? Math.round(totalTime / timeCount) : 0,
-        avgTTFT: ttftCount > 0 ? Math.round(totalTTFT / ttftCount) : 0,
-        minResponseTime: timeCount > 0 ? minTime : 0,
-        maxResponseTime: timeCount > 0 ? maxTime : 0,
+        totalRequests: acc.totalRequests + processing,
+        successCount: acc.successCount,
+        errorCount: acc.errorCount,
+        interceptedCount: acc.interceptedCount,
+        processingCount: processing,
+        avgResponseTime: acc.timeCount > 0 ? Math.round(acc.totalTime / acc.timeCount) : 0,
+        avgTTFT: acc.ttftCount > 0 ? Math.round(acc.totalTTFT / acc.ttftCount) : 0,
+        minResponseTime: 0,
+        maxResponseTime: 0,
         totalLogEntries: logEntries.length,
-        totalResponseChars,
-        totalThinkingChars,
-        totalToolCalls,
-        totalRetries,
-        totalContinuations,
-        modelCounts,
-        formatCounts,
+        totalResponseChars: acc.totalResponseChars,
+        totalThinkingChars: acc.totalThinkingChars,
+        totalToolCalls: acc.totalToolCalls,
+        totalRetries: acc.totalRetries,
+        totalContinuations: acc.totalContinuations,
+        modelCounts: { ...acc.modelCounts },
+        formatCounts: { ...acc.formatCounts },
         todayCount,
         last7dCount,
         last30dCount,
@@ -642,6 +734,8 @@ export class RequestLogger {
         
         // ★ 持久化到文件
         persistRequest(this.summary, this.payload);
+        accumulateSummary(this.summary);
+        saveStatsSnapshot();
         
         const retryInfo = this.summary.retryCount > 0 ? ` retry=${this.summary.retryCount}` : '';
         const contInfo = this.summary.continuationCount > 0 ? ` cont=${this.summary.continuationCount}` : '';
@@ -656,6 +750,8 @@ export class RequestLogger {
         this.log('info', 'System', 'intercept', reason);
         logEmitter.emit('summary', this.summary);
         persistRequest(this.summary, this.payload);
+        accumulateSummary(this.summary);
+        saveStatsSnapshot();
         console.log(`\x1b[35m⊘\x1b[0m [${this.requestId}] 拦截: ${reason}`);
     }
     
@@ -667,5 +763,7 @@ export class RequestLogger {
         this.log('error', 'System', 'error', error);
         logEmitter.emit('summary', this.summary);
         persistRequest(this.summary, this.payload);
+        accumulateSummary(this.summary);
+        saveStatsSnapshot();
     }
 }

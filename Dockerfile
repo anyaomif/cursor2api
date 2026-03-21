@@ -21,6 +21,13 @@ WORKDIR /app
 # 设置为生产环境
 ENV NODE_ENV=production
 
+# 预下载 Tesseract OCR 语言数据（避免容器内 Worker 线程运行时联网下载导致崩溃）
+ENV TESSDATA_PREFIX=/app/tessdata
+RUN apk add --no-cache wget \
+    && mkdir -p /app/tessdata \
+    && wget -q "https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz" -O /app/tessdata/eng.traineddata.gz \
+    && wget -q "https://cdn.jsdelivr.net/npm/@tesseract.js-data/chi_sim/4.0.0_best_int/chi_sim.traineddata.gz" -O /app/tessdata/chi_sim.traineddata.gz
+
 # 拷贝包配置并仅安装生产环境依赖（极大减小镜像体积）
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev \

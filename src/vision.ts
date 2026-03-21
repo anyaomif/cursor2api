@@ -74,7 +74,9 @@ export async function applyVisionInterceptor(messages: AnthropicMessage[]): Prom
 const UNSUPPORTED_OCR_TYPES = new Set(['image/svg+xml']);
 
 async function processWithLocalOCR(imageBlocks: AnthropicContentBlock[]): Promise<string> {
-    const worker = await createWorker('eng+chi_sim');
+    const tessDataPath = process.env.TESSDATA_PREFIX;
+    const workerOptions = tessDataPath ? { langPath: tessDataPath, gzip: true } : {};
+    const worker = await createWorker('eng+chi_sim', undefined, workerOptions);
     let combinedText = '';
 
     for (let i = 0; i < imageBlocks.length; i++) {

@@ -13,7 +13,7 @@ import { handleMessages, listModels, countTokens } from './handler.js';
 import { handleOpenAIChatCompletions, handleOpenAIResponses } from './openai-handler.js';
 import { serveLogViewer, apiGetLogs, apiGetRequests, apiGetStats, apiGetPayload, apiLogsStream, serveLogViewerLogin, apiClearLogs, serveVueApp } from './log-viewer.js';
 import { serveAdmin, apiGetConfig, apiUpdateConfig, apiReloadConfig } from './admin.js';
-import { loadLogsFromFiles } from './logger.js';
+import { loadLogsFromFiles, loadStatsSnapshot } from './logger.js';
 
 // 从 package.json 读取版本号，统一来源，避免多处硬编码
 const require = createRequire(import.meta.url);
@@ -161,6 +161,7 @@ app.get('/', (_req, res) => {
 // ==================== 启动 ====================
 
 // ★ 从日志文件加载历史（必须在 listen 之前）
+loadStatsSnapshot();
 loadLogsFromFiles();
 
 app.listen(config.port, () => {
